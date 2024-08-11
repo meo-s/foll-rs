@@ -1,4 +1,4 @@
-use std::{fs, io::Write};
+use std::{fs, io::Write, path::Path};
 
 use condition::RollingCondition;
 
@@ -149,7 +149,10 @@ impl<T: RollingFileNameProvider> RollingFile<T> {
             .next_file_name()
             .map_err(|e| std::io::Error::other(e.to_string()))?;
 
-        self.file = Some(File::open(file_name, &self.file_open_options)?);
+        self.file = Some(File::open(
+            Path::new(&self.directory).join(&file_name),
+            &self.file_open_options,
+        )?);
         Ok(())
     }
 
@@ -261,7 +264,10 @@ impl<T: RollingFileNameProvider> RollingFileBuilder<T> {
         self
     }
 
-    pub fn rolling_condition(mut self, cond: impl RollingCondition + Send + Sync + 'static) -> Self {
+    pub fn rolling_condition(
+        mut self,
+        cond: impl RollingCondition + Send + Sync + 'static,
+    ) -> Self {
         self.rolling_conditions.push(Box::new(cond));
         self
     }

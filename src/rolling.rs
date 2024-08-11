@@ -7,9 +7,10 @@ use crate::file::{File, FileOpenOptions};
 pub mod condition;
 
 pub trait RollingFileNameProvider: std::fmt::Debug {
-    fn acceptable(&self, file_name: &str) -> Result<bool, Box<dyn std::error::Error>>;
+    fn acceptable(&self, file_name: &str)
+        -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
 
-    fn next_file_name(&mut self) -> Result<String, Box<dyn std::error::Error>>;
+    fn next_file_name(&mut self) -> Result<String, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[derive(Debug)]
@@ -22,7 +23,10 @@ pub struct DefaultRollingFileNameProvider {
 }
 
 impl RollingFileNameProvider for DefaultRollingFileNameProvider {
-    fn acceptable(&self, file_name: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    fn acceptable(
+        &self,
+        file_name: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(ref file_name_prefix) = self.file_name_prefix {
             if !file_name.starts_with(file_name_prefix) {
                 return Ok(false);
@@ -38,7 +42,7 @@ impl RollingFileNameProvider for DefaultRollingFileNameProvider {
         Ok(true)
     }
 
-    fn next_file_name(&mut self) -> Result<String, Box<dyn std::error::Error>> {
+    fn next_file_name(&mut self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let prefix = self
             .file_name_prefix
             .as_ref()
@@ -123,7 +127,7 @@ pub struct RollingFile<T: RollingFileNameProvider> {
 }
 
 impl<T: RollingFileNameProvider> RollingFile<T> {
-    pub fn should_roll(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub fn should_roll(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         self.file.as_ref().map_or(Ok(true), |file| {
             for condition in &self.rolling_conditions {
                 if condition.should_roll(file.stat())? {
@@ -134,7 +138,7 @@ impl<T: RollingFileNameProvider> RollingFile<T> {
         })
     }
 
-    pub fn roll(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn roll(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.open_next_file()?;
         self.something()?;
         Ok(())
@@ -147,7 +151,7 @@ impl<T: RollingFileNameProvider> RollingFile<T> {
         let file_name = self
             .file_name_provider
             .next_file_name()
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
+            .map_err(std::io::Error::other)?;
 
         self.file = Some(File::open(
             Path::new(&self.directory).join(&file_name),
@@ -182,7 +186,7 @@ impl<T: RollingFileNameProvider> RollingFile<T> {
                 {
                     Ok(true) => (),
                     Ok(false) => return None,
-                    Err(e) => return Some(Err(std::io::Error::other(e.to_string()))),
+                    Err(e) => return Some(Err(std::io::Error::other(e))),
                 }
 
                 Some(match metadata.created() {
@@ -200,7 +204,9 @@ impl<T: RollingFileNameProvider> RollingFile<T> {
         Ok(())
     }
 
-    fn writer<'s>(&mut self) -> Result<&mut impl std::io::Write, Box<dyn std::error::Error>> {
+    fn writer<'s>(
+        &mut self,
+    ) -> Result<&mut impl std::io::Write, Box<dyn std::error::Error + Send + Sync>> {
         while self.should_roll()? {
             self.roll()?;
         }
@@ -218,9 +224,7 @@ impl<T: RollingFileNameProvider> std::io::Write for RollingFile<T> {
     }
 
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.writer()
-            .map_err(|e| std::io::Error::other(e.to_string()))?
-            .write(buf)
+        self.writer().map_err(std::io::Error::other)?.write(buf)
     }
 }
 
@@ -272,7 +276,7 @@ impl<T: RollingFileNameProvider> RollingFileBuilder<T> {
         self
     }
 
-    pub fn finish(self) -> Result<RollingFile<T>, Box<dyn std::error::Error>> {
+    pub fn finish(self) -> Result<RollingFile<T>, Box<dyn std::error::Error + Send + Sync>> {
         if self.file_name_provider.is_none() {
             return Err("`file_name_provider` is required".into());
         }

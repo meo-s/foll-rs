@@ -4,7 +4,7 @@ pub trait RollingCondition
 where
     Self: std::fmt::Debug,
 {
-    fn should_roll(&self, stat: &FileStat) -> Result<bool, Box<dyn std::error::Error>>;
+    fn should_roll(&self, stat: &FileStat) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[derive(Debug)]
@@ -13,7 +13,7 @@ pub struct RollingBySize {
 }
 
 impl RollingCondition for RollingBySize {
-    fn should_roll(&self, stat: &FileStat) -> Result<bool, Box<dyn std::error::Error>> {
+    fn should_roll(&self, stat: &FileStat) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self.desired_size <= stat.len())
     }
 }
@@ -44,7 +44,7 @@ impl RollingByDuration {
 }
 
 impl RollingCondition for RollingByDuration {
-    fn should_roll(&self, stat: &FileStat) -> Result<bool, Box<dyn std::error::Error>> {
+    fn should_roll(&self, stat: &FileStat) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         Ok(stat.created() + self.duration <= time::OffsetDateTime::now_utc())
     }
 }
